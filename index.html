@@ -65,19 +65,21 @@ function sheetsFix(){S.pc=S.pc||[];S.fc=S.fc||[];S.ex=S.ex||[];S.pr=S.pr||[];S.s
 const ymd=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const save=()=>{try{localStorage.setItem('zad1',JSON.stringify(S))}catch(e){}};
 let T={tool:'pen',color:PEN[0],w:3,fill:'y'},F={},hist=[],Q=[],M=null,P=null;
-let pinching=false,noTap=0,zq=0,zt=0;
+let pinching=false,noTap=0,zq=0,zt=0,penT=0,palmOn=true,palmSet=0;
+const penNear=()=>palmOn&&Date.now()-penT<1200;
+setInterval(()=>{if(palmSet&&!penNear()){palmSet=0;document.documentElement.style.touchAction=''}},400);
 /* ---------- масштаб (щипок двумя пальцами и кнопки) ---------- */
 function setZ(z){S.z=Math.min(3,Math.max(.5,z));document.documentElement.style.setProperty('--z',S.z);
  cancelAnimationFrame(zq);zq=requestAnimationFrame(()=>Q.forEach(f=>f()));clearTimeout(zt);zt=setTimeout(save,400)}
 {const pts=new Map();let d0=0,z0=1;
  const dist=()=>{const[a,b]=[...pts.values()];return Math.hypot(a[0]-b[0],a[1]-b[1])};
- document.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;pts.set(e.pointerId,[e.clientX,e.clientY]);
+ document.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch'||penNear()||e.width>45||e.height>45)return;pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size===2){pinching=true;noTap=Date.now();d0=dist()||1;z0=S.z}},true);
  document.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pinching&&pts.size===2){noTap=Date.now();setZ(z0*dist()/d0)}},true);
  const up=e=>{if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2){if(pinching)noTap=Date.now();pinching=false}};
  document.addEventListener('pointerup',up,true);document.addEventListener('pointercancel',up,true);}
-document.addEventListener('pointermove',e=>{if(e.pointerType==='touch')return;const b=document.querySelector('#tb [data-t=er]');if(b)b.classList.toggle('on',T.tool==='er'||(e.buttons&34)>0);const d=$('#dbg');if(d)d.textContent=e.pointerType+' кнопки:'+e.buttons+' p:'+(e.pressure||0).toFixed(2)},true);
+document.addEventListener('pointermove',e=>{if(e.pointerType==='pen'){penT=Date.now();if(palmOn&&!palmSet){palmSet=1;document.documentElement.style.touchAction='none'}}if(e.pointerType==='touch')return;const b=document.querySelector('#tb [data-t=er]');if(b)b.classList.toggle('on',T.tool==='er'||(e.buttons&34)>0);const d=$('#dbg');if(d)d.textContent=e.pointerType+' кнопки:'+e.buttons+' p:'+(e.pressure||0).toFixed(2)},true);
 
 /* ---------- рукописный движок ---------- */
 function paint(cv,sc){
@@ -96,25 +98,27 @@ function attach(cv,get,done){
  const H=()=>cv.getBoundingClientRect().height;
  const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.height,(e.clientY-r.top)/r.height,e.pressure||.5]};
  const er=p=>{const o=get(),rad=T.w*4/H(),n=o.s.length;o.s=o.s.filter(s=>!s.p.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<rad));if(o.s.length!==n)paint(cv,o.s)};
- const isEr=e=>T.tool==='er'||(e.pointerType!=='touch'&&((e.buttons&34)>0||e.button===2||e.button===5));
+ const isEr=e=>T.tool==='er'||(e.pointerType!=='touch'&&((e.buttons&34)>0||e.button===2||e.button===5||(e.pointerType==='pen'&&(e.buttons&1)&&e.pressure===0)));
  const begin=e=>{cur={c:T.color,h:T.tool==='hl'?1:0,w:(T.tool==='hl'?T.w*5:T.w)/H(),p:[pt(e)],er:isEr(e)};if(cur.er)er(cur.p[0])};
  const fin=()=>{if(!cur)return;if(!cur.er){if(cur.p.length<2)cur.p.push(cur.p[0].slice());get().s.push(cur);hist.push({o:get(),s:cur})}cur=null;paint(cv,get().s);save();done&&done('ink')};
  cv.oncontextmenu=e=>e.preventDefault();
+ cv.onpointerleave=()=>{if(cur&&cur.hov)fin()};
  cv.onpointerdown=e=>{
-  cv.setPointerCapture(e.pointerId);
+  try{cv.setPointerCapture(e.pointerId)}catch(_){}
   const t=e.pointerType==='touch';
   if(t||!['pen','hl','er'].includes(T.tool)){tp={x:e.clientX,y:e.clientY,m:0,t};return}
   begin(e);
  };
  cv.onpointermove=e=>{
-  if(tp){tp.m+=Math.abs(e.clientX-tp.x)+Math.abs(e.clientY-tp.y);if(tp.t&&!pinching)scrollBy(tp.x-e.clientX,tp.y-e.clientY);tp.x=e.clientX;tp.y=e.clientY;return}
+  if(tp){tp.m+=Math.abs(e.clientX-tp.x)+Math.abs(e.clientY-tp.y);if(tp.t&&!pinching&&!penNear())scrollBy(tp.x-e.clientX,tp.y-e.clientY);tp.x=e.clientX;tp.y=e.clientY;return}
+  if(!cur&&!tp&&e.pointerType==='pen'&&(e.buttons&1)&&e.pressure===0&&['pen','hl','er'].includes(T.tool)){try{cv.setPointerCapture(e.pointerId)}catch(_){}begin(e);cur.hov=1}
   if(!cur)return;
-  if(e.pointerType!=='touch'&&isEr(e)!==cur.er){fin();begin(e)}
+  if(e.pointerType!=='touch'&&isEr(e)!==cur.er){fin();if(e.buttons)begin(e);else return}
   for(const v of(e.getCoalescedEvents?e.getCoalescedEvents():[e])){const p=pt(v);cur.er?er(p):cur.p.push(p)}
   if(!cur.er)paint(cv,get().s.concat(cur));
  };
  const up=()=>{
-  if(tp){const m=tp.m;cv._m=m;tp=null;if(m<10&&Date.now()-noTap>350)done&&done('tap');return}
+  if(tp){const m=tp.m,tt=tp.t;cv._m=tt&&penNear()?99:m;tp=null;if(m<10&&Date.now()-noTap>350&&!(tt&&penNear()))done&&done('tap');return}
   fin();
  };
  cv.onpointerup=up;cv.onpointercancel=()=>{cur=tp=null;paint(cv,get().s)};
@@ -356,6 +360,7 @@ function colors(){
  sp();
  add('🔍−',()=>setZ(S.z/1.15),{title:'Уменьшить'});add('🔍+',()=>setZ(S.z*1.15),{title:'Увеличить'});add('↔',()=>setZ(1),{title:'По ширине экрана'});
  sp();
+ const pm=add('✋',()=>{palmOn=!palmOn;pm.classList.toggle('on',palmOn);if(!palmOn){palmSet=0;document.documentElement.style.touchAction=''}},{title:'Защита от ладони: пока стилус рядом с экраном, касания руки игнорируются'});pm.classList.add('on');
  const pb=add('📄 PDF',()=>exportPdf(pb),{title:'Отправить все листы в PDF'});
  add('💾',()=>backupPop(tb.lastChild),{title:'Резервная копия данных'});
  tb.append(Object.assign(document.createElement('small'),{id:'dbg',title:'Состояние стилуса (для проверки кнопки)',style:'opacity:.6;min-width:90px'}));
