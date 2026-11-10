@@ -376,7 +376,8 @@ function mkPdf(J){
 }
 function backupPop(a){
  const w=document.createElement('div');
- w.append(btn('Сохранить копию (отправить файл)',()=>{closePop();sharePdf(new TextEncoder().encode(JSON.stringify(S)),'Zadachnik_backup_'+ymd()+'.json','application/json')}));
+ if(window.Android&&Android.saveBackup){const sb=btn('💾 Сохранить на планшет (Документы/Zadachnik)',()=>{doSave();const r=Android.saveBackup(JSON.stringify(S),'Zadachnik_backup_'+ymd()+'.json');sb.textContent=r?'✓ Сохранено: '+r:'Не удалось сохранить'});w.append(sb);w.append(Object.assign(document.createElement('small'),{textContent:'Автокопия в этой папке обновляется каждые 5 минут и при выходе из приложения'}))}
+ w.append(btn('Отправить копию (почта, мессенджер)',()=>{closePop();sharePdf(new TextEncoder().encode(JSON.stringify(S)),'Zadachnik_backup_'+ymd()+'.json','application/json')}));
  const fi=document.createElement('input');fi.type='file';fi.accept='.json,application/json';fi.style.display='none';
  fi.onchange=async()=>{try{const d=JSON.parse(await fi.files[0].text());if(!d.sheets)throw 0;S=d;sheetsFix();save();setZ(S.z||1);render();closePop()}catch(e){a.textContent='Не тот файл'}};
  w.append(fi,btn('Восстановить из файла',()=>fi.click()));
