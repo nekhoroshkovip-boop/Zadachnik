@@ -43,7 +43,7 @@ dialog textarea{width:100%;height:200px;font:inherit}
 .dbtn{min-height:44px;padding:0 16px;margin:8px 6px 0 0;border-radius:10px;border:1px solid var(--bd);background:var(--bar);color:var(--tx);font:inherit}
 </style></head>
 <body>
-<div id="top"><div id="tabs"></div><div id="tb"></div></div>
+<div id="top"><div id="warn" style="display:none;background:#c0392b;color:#fff;padding:6px 10px;font-weight:700"></div><div id="tabs"></div><div id="tb"></div></div>
 <div class="sheet"><div class="lbl">Наименование направления</div><div id="ttl"></div><div id="grid"></div></div>
 <dialog id="dlg"><b>Дополнительная информация</b> <small>(пишите стилусом, инструменты — на панели сверху)</small>
 <canvas id="mcv"></canvas><button class="dbtn" id="mclr">Очистить</button><button class="dbtn" id="mok">Готово</button></dialog>
@@ -53,7 +53,11 @@ dialog textarea{width:100%;height:200px;font:inherit}
 const $=s=>document.querySelector(s),COLS=['ex','pr','inf','no','task','due'],HD=['Исп.','Изд.','Для инф.','№','Задача','Срок'];
 const PEN=['#222222','#e5192b','#f2d600','#5fd13f','#00e5d4','#a96ae0'],BG={y:'#fff176',r:'#ef9a9a',g:'#a5d6a7'};
 let S={ex:[],pr:[],sheets:[],cur:0,pc:[],fc:[],z:1};
-try{S=Object.assign(S,JSON.parse(localStorage.getItem('zad1')||'{}'))}catch(e){}
+function loadS(){let a=null,b=null;
+ try{a=JSON.parse(localStorage.getItem('zad1')||'null')}catch(e){}
+ try{if(window.Android&&Android.loadData){const t=Android.loadData();if(t)b=JSON.parse(t)}}catch(e){}
+ return(a&&b)?((b.ts||0)>(a.ts||0)?b:a):(a||b)}
+try{const d=loadS();if(d)S=Object.assign(S,d)}catch(e){}
 const mk=()=>({ex:'',pr:'',inf:{s:[]},no:{s:[],t:''},task:{s:[],t:''},due:'',fill:{}});
 if(!S.sheets.length)S.sheets=[{name:'Лист 1',title:S.title||{s:[],t:''},rows:S.rows||[]}];
 delete S.title;delete S.rows;
@@ -64,7 +68,20 @@ const sh=()=>S.sheets[S.cur];
 function sheetsFix(){if(S.pc&&S.pc.length)S.pcol=S.pc[S.pc.length-1];if(S.fc&&S.fc.length)S.fcol=S.fc[S.fc.length-1];S.pc=[];S.fc=[];S.ex=S.ex||[];S.pr=S.pr||[];S.sheets.forEach(x=>{while(x.rows.length<20)x.rows.push(mk())});if(S.cur>=S.sheets.length)S.cur=0}
 sheetsFix();
 const ymd=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
-const save=()=>{try{localStorage.setItem('zad1',JSON.stringify(S))}catch(e){}};
+let sv=0,saveErr=0;
+const nat=()=>window.Android&&Android.saveData;
+function doSave(){clearTimeout(sv);sv=0;S.ts=Date.now();let j;try{j=JSON.stringify(S)}catch(e){return}
+ try{localStorage.setItem('zad1',j);saveErr=0}catch(e){saveErr=1}
+ try{if(nat())Android.saveData(j)}catch(e){}
+ const w=$('#warn');if(w){w.style.display=saveErr&&!nat()?'block':'none';w.textContent='⚠ Запись НЕ сохраняется: память заполнена. Нажмите 💾 и сохраните копию.'}}
+const save=()=>{clearTimeout(sv);sv=setTimeout(doSave,250)};
+window.flushSave=doSave;
+addEventListener('pagehide',doSave);document.addEventListener('visibilitychange',()=>{if(document.hidden)doSave()});
+function compactS(sc){sc.forEach(s=>{if(!s.p||!s.p.length)return;const o=[];let l=null;
+ s.p.forEach((q,i)=>{if(!l||i===s.p.length-1||Math.hypot(q[0]-l[0],q[1]-l[1])>.003){const r=[+q[0].toFixed(4),+q[1].toFixed(4),+(q[2]||.5).toFixed(2)];o.push(r);l=r}});
+ if(o.length<2)o.push(o[0].slice());s.p=o;s.w=+s.w.toFixed(5)})}
+function compactAll(){S.sheets.forEach(x=>{compactS(x.title.s);x.rows.forEach(r=>{compactS(r.no.s);compactS(r.task.s);compactS(r.inf.s)})})}
+compactAll();doSave();
 let T={tool:'pen',color:PEN[0],w:3,fill:'y'},F={},hist=[],Q=[],M=null,P=null,LS=null,LG=null;
 let pinching=false,noTap=0,zq=0,zt=0,penT=0,palmOn=true,palmSet=0;
 const penNear=()=>palmOn&&Date.now()-penT<1200;
@@ -110,7 +127,7 @@ function dropSel(cur,sc){
  if(c-a<=W-.04){if(a<.02)sx=.02-a;else if(c>W-.02)sx=W-.02-c}else sx=.02-a;
  sel.forEach(s=>s.p.forEach(p=>{p[0]+=sx;p[1]+=sy}));
  if(to!==so){so.s=so.s.filter(s=>!sel.includes(s));to.s=to.s.concat(sel);hist.forEach(h=>{if(sel.includes(h.s))h.o=to})}
- LS={o:to,sel};paint(sc,so.s);paint(tc,to.s);
+ compactS(sel);LS={o:to,sel};paint(sc,so.s);paint(tc,to.s);
 }
 function attach(cv,get,done){
  let cur=null,tp=null;
@@ -124,7 +141,7 @@ function attach(cv,get,done){
    if(LS){LS=null;Q.forEach(f=>f())}
    cur={lasso:1,mode:'loop',pts:[p],er:false};return}
   cur={c:T.color,h:T.tool==='hl'?1:0,w:(T.tool==='hl'?T.w*5:T.w)/H(),p:[pt(e)],er:isEr(e)};if(cur.er)er(cur.p[0])};
- const fin=()=>{if(!cur)return;if(cur.lasso){lend();cur=null;return}if(!cur.er){if(cur.p.length<2)cur.p.push(cur.p[0].slice());get().s.push(cur);hist.push({o:get(),s:cur})}cur=null;paint(cv,get().s);save();done&&done('ink')};
+ const fin=()=>{if(!cur)return;if(cur.lasso){lend();cur=null;return}if(!cur.er){compactS([cur]);get().s.push(cur);hist.push({o:get(),s:cur})}cur=null;paint(cv,get().s);save();done&&done('ink')};
  cv._get=get;
 const lmove=e=>{
   if(cur.mode==='loop'){for(const v of(e.getCoalescedEvents?e.getCoalescedEvents():[e]))cur.pts.push(pt(v));
@@ -362,7 +379,9 @@ function backupPop(a){
  w.append(btn('Сохранить копию (отправить файл)',()=>{closePop();sharePdf(new TextEncoder().encode(JSON.stringify(S)),'Zadachnik_backup_'+ymd()+'.json','application/json')}));
  const fi=document.createElement('input');fi.type='file';fi.accept='.json,application/json';fi.style.display='none';
  fi.onchange=async()=>{try{const d=JSON.parse(await fi.files[0].text());if(!d.sheets)throw 0;S=d;sheetsFix();save();setZ(S.z||1);render();closePop()}catch(e){a.textContent='Не тот файл'}};
- w.append(fi,btn('Восстановить из файла',()=>fi.click()));pop(a,w);
+ w.append(fi,btn('Восстановить из файла',()=>fi.click()));
+ try{if(window.Android&&Android.listSnaps)String(Android.listSnaps()).split(',').filter(Boolean).forEach(dd=>{w.append(btn('Автокопия за '+dd.slice(6,8)+'.'+dd.slice(4,6),()=>{try{const d=JSON.parse(Android.loadSnap(dd));if(!d.sheets)throw 0;S=d;sheetsFix();save();setZ(S.z||1);render();closePop()}catch(e){a.textContent='Ошибка'}}))})}catch(e){}
+ pop(a,w);
 }
 async function sharePdf(u8,name,mime){
  mime=mime||'application/pdf';
