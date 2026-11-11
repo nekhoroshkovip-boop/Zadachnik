@@ -19,6 +19,7 @@ body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,-apple-sy
 #tb .sw{width:34px;min-width:34px;min-height:34px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #888}
 #tb .f{width:34px;min-width:34px;min-height:34px;border-radius:6px;font-size:14px}
 .cwrap,#cw,#fw{display:flex;gap:6px;align-items:center}
+.an{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;pointer-events:none;color:#444;font-weight:700;font-size:clamp(calc(12px*var(--z,1)),1.6cqw,calc(28px*var(--z,1)))}
 .pop small{display:block;margin:6px 4px 2px;color:var(--tx);opacity:.7}
 .pop .cb{border-left:0}
 .sp{width:1px;height:30px;background:var(--bd);margin:0 4px}
@@ -172,7 +173,7 @@ const lmove=e=>{
   if(cur.mode==='loop'){const g=cur.pts,o=get();LS=null;
    if(g.length>6){const sel=o.s.filter(s=>s.p.filter(q=>inPoly(q,g)).length*2>=s.p.length);if(sel.length)LS={o,sel}}
    paint(cv,o.s)}
-  else{endGhost();dropSel(cur,cv);save()}
+  else{endGhost();dropSel(cur,cv);save();clearTimeout(rnT);rnT=setTimeout(()=>render(1),300)}
  };
  cv.oncontextmenu=e=>e.preventDefault();
  cv.onpointerleave=()=>{if(cur&&cur.hov)fin()};
@@ -204,13 +205,18 @@ const lmove=e=>{
 }
 function edit(d,o,sp){
  const i=document.createElement('input');i.value=o.t||'';i.enterKeyHint='done';d.append(i);i.focus();let dn=0;
- i.onblur=()=>{if(dn)return;dn=1;o.t=i.value;sp.textContent=o.t;i.remove();save()};
+ i.onblur=()=>{if(dn)return;dn=1;o.t=i.value;sp.textContent=o.t;i.remove();save();numChk(d,o)};
  i.onkeydown=e=>{if(e.key==='Enter')i.blur()};
 }
+const FILLED=new WeakMap();let rnT=0;
+const tf=o=>!!(o.s.length||(o.t&&o.t.trim()));
+function numChk(d,o){if(!d||d.dataset.c!=='task')return;const f=tf(o);if(FILLED.get(o)===f)return;FILLED.set(o,f);
+ clearTimeout(rnT);rnT=setTimeout(function w(){if(Date.now()-penT<600){rnT=setTimeout(w,500);return}render(1)},700)}
 function inkCell(o){
  const d=document.createElement('div');d.className='c ink';d.innerHTML='<canvas></canvas><span></span>';
  const cv=d.firstChild,sp=d.lastChild;sp.textContent=o.t||'';
- attach(cv,()=>o,k=>{if(k!=='tap')return;if(T.tool==='fill')fillAt(d);else if(T.tool==='rows'&&d.dataset.r!=null)rowPop(d,+d.dataset.r)});
+ FILLED.set(o,tf(o));
+ attach(cv,()=>o,k=>{if(k==='ink')numChk(d,o);if(k!=='tap')return;if(T.tool==='fill')fillAt(d);else if(T.tool==='rows'&&d.dataset.r!=null)rowPop(d,+d.dataset.r)});
  cv.onclick=()=>{if(T.tool==='kbd'&&cv._m<10&&Date.now()-noTap>350)edit(d,o,sp)};
  Q.push(()=>paint(cv,o.s));return d;
 }
@@ -346,7 +352,7 @@ function fitTxt(x,t,cx,cy,w,h,fs,bold){if(!t)return;x.fillStyle='#222';x.textBas
 const newPg=()=>{const c=document.createElement('canvas');c.width=1240;c.height=1754;const x=c.getContext('2d');x.fillStyle='#fffefb';x.fillRect(0,0,1240,1754);return[c,x]};
 async function jpg(c){const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));return{b:new Uint8Array(await b.arrayBuffer()),w:c.width,h:c.height}}
 async function tablePg(s,a,z,p,pg){
- const[c,x]=newPg(),M=50,tw=1140,th=130,hh=56,rh=(1754-2*M-th-hh)/25;
+ const[c,x]=newPg(),M=50,tw=1140,th=130,hh=56,rh=(1754-2*M-th-hh)/25;let nq=0;const nm=s.rows.map(r=>tf(r.task)?++nq:0);
  const cw=[.062,.062,.06,.046].map(v=>v*tw);cw.push(tw-cw.reduce((u,v)=>u+v,0)-.08*tw,.08*tw);
  x.strokeStyle='#222';x.lineWidth=3;x.strokeRect(M,M,tw,1754-2*M);
  x.fillStyle='#888';x.font='20px sans-serif';x.textBaseline='top';x.fillText(s.name+'  ·  стр. '+p+'/'+pg,M+10,M+6);
@@ -361,7 +367,7 @@ async function tablePg(s,a,z,p,pg){
    if(k==='ex'||k==='pr')fitTxt(x,r[k],cx,y,cw[j],rh,22);
    else if(k==='due')fitTxt(x,r.due?fmt(r.due):'',cx,y,cw[j],rh,22,1);
    else if(k==='inf'){if(r.inf.s.length)fitTxt(x,'✎',cx,y,cw[j],rh,28)}
-   else{drawS(x,r[k].s,cx,y,rh);fitTxt(x,r[k].t,cx,y,cw[j],rh,30)}
+   else{drawS(x,r[k].s,cx,y,rh);fitTxt(x,r[k].t,cx,y,cw[j],rh,30);if(k==='no'&&S.auto!==false&&nm[i]&&!(r.no.s.length||r.no.t))fitTxt(x,String(nm[i]),cx,y,cw[j],rh,26,1)}
    x.restore();cx+=cw[j];
    if(j<5){x.strokeStyle='#8a877c';x.lineWidth=1;x.setLineDash([3,4]);x.beginPath();x.moveTo(cx,y);x.lineTo(cx,y+rh);x.stroke();x.setLineDash([])}
   });
@@ -451,6 +457,7 @@ function colors(){
  const sp=()=>tb.append(Object.assign(document.createElement('i'),{className:'sp'}));
  [['kbd','⌨','Клавиатура'],['pen','✒️','Ручка'],['hl','🖍','Маркер-выделитель'],['er','🧽','Ластик (ручка и выделение)']].concat([['lasso','➰','Лассо: обведите записи, затем перетащите (в т.ч. в другую строку)'],['rows','⇅','Строки: переместить, вставить, удалить']]).forEach(([t,i,ti])=>{add(i,()=>{T.tool=t;penEr=false;if(t!=='lasso'&&LS){LS=null;Q.forEach(f=>f())}ui()},{title:ti}).dataset.t=t});
  add('✂',()=>{if(LS){const o=LS.o;o.s=o.s.filter(s=>!LS.sel.includes(s));LS=null;save();render(1)}},{title:'Удалить выделенное лассо'});
+ const nb=add('№',()=>{S.auto=S.auto===false;nb.classList.toggle('on',S.auto!==false);save();render(1)},{title:'Автонумерация строк по заполнению «Задачи»'});nb.classList.toggle('on',S.auto!==false);
  sp();tb.append(Object.assign(document.createElement('span'),{id:'cw'}));
  const r=Object.assign(document.createElement('input'),{type:'range',min:1,max:12,value:T.w,title:'Толщина линии'});r.oninput=()=>T.w=+r.value;tb.append(r);
  sp();tb.append(Object.assign(document.createElement('span'),{id:'fw'}));
@@ -475,11 +482,12 @@ function render(kp){
  const h=document.createElement('div');h.className='row hd';
  HD.forEach((t,i)=>{const c=document.createElement('div'),k=COLS[i];c.className='c'+(F[k]&&(F[k].q||F[k].c||(F[k].n&&F[k].n.length))?' flt':'');c.textContent=t;c.dataset.h=k;h.append(c)});
  g.append(h);
+ let nq=0;const nums=sh().rows.map(r=>tf(r.task)?++nq:0);
  sh().rows.forEach((r,i)=>{
   if(!vis(r))return;const row=document.createElement('div');row.className='row';
   COLS.forEach(k=>{
    let c;
-   if(k==='no'||k==='task')c=inkCell(r[k]);
+   if(k==='no'||k==='task'){c=inkCell(r[k]);if(k==='no'&&S.auto!==false&&nums[i]&&!(r.no.s.length||r.no.t)){const bn=document.createElement('b');bn.className='an';bn.textContent=nums[i];c.append(bn)}}
    else{c=document.createElement('div');c.className='c';c.textContent=k==='inf'?(r.inf.s.length?'✎':''):k==='due'?(r.due?fmt(r.due):''):r[k]}
    c.dataset.r=i;c.dataset.c=k;{const q=col(r,k);c.style.background=BG[q]||q}row.append(c);
   });
