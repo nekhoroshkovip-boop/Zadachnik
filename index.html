@@ -22,7 +22,7 @@ body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,-apple-sy
 .pop small{display:block;margin:6px 4px 2px;color:var(--tx);opacity:.7}
 .pop .cb{border-left:0}
 .sp{width:1px;height:30px;background:var(--bd);margin:0 4px}
-.sheet{width:calc(100% * var(--z,1));margin:12px auto;background:#fffefb;color:#222;border:2px solid #222;container-type:inline-size}
+.sheet{width:calc(100% * var(--zw,1));margin:12px auto;background:#fffefb;color:#222;border:2px solid #222;container-type:inline-size}
 .lbl{font-size:11px;color:#888;padding:4px 8px 0}
 #ttl{height:calc(64px*var(--z,1));position:relative;border-bottom:1px dotted var(--ln)}
 .row{display:grid;grid-template-columns:minmax(calc(48px*var(--z,1)),6.2%) minmax(calc(48px*var(--z,1)),6.2%) minmax(calc(46px*var(--z,1)),6%) minmax(calc(38px*var(--z,1)),4.6%) 1fr minmax(calc(70px*var(--z,1)),8%);height:calc(56px*var(--z,1));border-bottom:1px dotted var(--ln)}
@@ -65,29 +65,31 @@ const mkSheet=n=>({name:n,title:{s:[],t:''},rows:Array.from({length:20},mk)});
 S.sheets.forEach(x=>{while(x.rows.length<20)x.rows.push(mk())});
 if(S.cur>=S.sheets.length)S.cur=0;
 const sh=()=>S.sheets[S.cur];
+const dmy=()=>{const d=new Date();return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear()};
 function sheetsFix(){if(S.pc&&S.pc.length)S.pcol=S.pc[S.pc.length-1];if(S.fc&&S.fc.length)S.fcol=S.fc[S.fc.length-1];S.pc=[];S.fc=[];S.ex=S.ex||[];S.pr=S.pr||[];S.sheets.forEach(x=>{while(x.rows.length<20)x.rows.push(mk())});if(S.cur>=S.sheets.length)S.cur=0}
 sheetsFix();
 const ymd=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 let sv=0,saveErr=0;
 const nat=()=>window.Android&&Android.saveData;
-function doSave(){clearTimeout(sv);sv=0;S.ts=Date.now();let j;try{j=JSON.stringify(S)}catch(e){return}
+function doSave(force){clearTimeout(sv);sv=0;if(!force&&Date.now()-penT<800){sv=setTimeout(doSave,1000);return}S.ts=Date.now();let j;try{j=JSON.stringify(S)}catch(e){return}
  try{localStorage.setItem('zad1',j);saveErr=0}catch(e){saveErr=1}
  try{if(nat())Android.saveData(j)}catch(e){}
  const w=$('#warn');if(w){w.style.display=saveErr&&!nat()?'block':'none';w.textContent='⚠ Запись НЕ сохраняется: память заполнена. Нажмите 💾 и сохраните копию.'}}
-const save=()=>{clearTimeout(sv);sv=setTimeout(doSave,250)};
-window.flushSave=doSave;
-addEventListener('pagehide',doSave);document.addEventListener('visibilitychange',()=>{if(document.hidden)doSave()});
+const save=()=>{clearTimeout(sv);sv=setTimeout(()=>doSave(),2500)};
+window.flushSave=()=>doSave(true);
+addEventListener('pagehide',()=>doSave(true));document.addEventListener('visibilitychange',()=>{if(document.hidden)doSave(true)});
 function compactS(sc){sc.forEach(s=>{if(!s.p||!s.p.length)return;const o=[];let l=null;
  s.p.forEach((q,i)=>{if(!l||i===s.p.length-1||Math.hypot(q[0]-l[0],q[1]-l[1])>.003){const r=[+q[0].toFixed(4),+q[1].toFixed(4),+(q[2]||.5).toFixed(2)];o.push(r);l=r}});
  if(o.length<2)o.push(o[0].slice());s.p=o;s.w=+s.w.toFixed(5)})}
 function compactAll(){S.sheets.forEach(x=>{compactS(x.title.s);x.rows.forEach(r=>{compactS(r.no.s);compactS(r.task.s);compactS(r.inf.s)})})}
-compactAll();doSave();
+compactAll();doSave(true);
 let T={tool:'pen',color:PEN[0],w:3,fill:'y'},F={},hist=[],Q=[],M=null,P=null,LS=null,LG=null;
-let pinching=false,noTap=0,zq=0,zt=0,penT=0,palmOn=true,palmSet=0;
+let pinching=false,noTap=0,zq=0,zt=0,penT=0,palmOn=true,palmSet=0,penEr=false,penBtn=0,penDown=0,dbgT=0,EB=null,FIT=1;
 const penNear=()=>palmOn&&Date.now()-penT<1200;
 setInterval(()=>{if(palmSet&&!penNear()){palmSet=0;document.documentElement.style.touchAction=''}},400);
 /* ---------- масштаб (щипок двумя пальцами и кнопки) ---------- */
-function setZ(z){S.z=Math.min(3,Math.max(.5,z));document.documentElement.style.setProperty('--z',S.z);
+function applyZ(){const r=document.documentElement.style;r.setProperty('--zw',S.z);r.setProperty('--z',S.z*FIT)}
+function setZ(z){S.z=Math.min(3,Math.max(.5,z));applyZ();
  cancelAnimationFrame(zq);zq=requestAnimationFrame(()=>Q.forEach(f=>f()));clearTimeout(zt);zt=setTimeout(save,400)}
 {const pts=new Map();let d0=0,z0=1;
  const dist=()=>{const[a,b]=[...pts.values()];return Math.hypot(a[0]-b[0],a[1]-b[1])};
@@ -97,7 +99,18 @@ function setZ(z){S.z=Math.min(3,Math.max(.5,z));document.documentElement.style.s
   if(pinching&&pts.size===2){noTap=Date.now();setZ(z0*dist()/d0)}},true);
  const up=e=>{if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2){if(pinching)noTap=Date.now();pinching=false}};
  document.addEventListener('pointerup',up,true);document.addEventListener('pointercancel',up,true);}
-document.addEventListener('pointermove',e=>{if(e.pointerType==='pen'){penT=Date.now();if(palmOn&&!palmSet){palmSet=1;document.documentElement.style.touchAction='none'}}if(e.pointerType==='touch')return;const b=document.querySelector('#tb [data-t=er]');if(b)b.classList.toggle('on',T.tool==='er'||(e.buttons&34)>0);const d=$('#dbg');if(d)d.textContent=e.pointerType+' кнопки:'+e.buttons+' p:'+(e.pressure||0).toFixed(2)},true);
+document.addEventListener('pointerdown',e=>{if(e.pointerType==='pen')penDown=1},true);
+document.addEventListener('pointerup',e=>{if(e.pointerType==='pen')penDown=0},true);document.addEventListener('pointercancel',e=>{if(e.pointerType==='pen')penDown=0},true);
+document.addEventListener('pointermove',e=>{
+ if(e.pointerType==='pen'){penT=Date.now();if(palmOn&&!palmSet){palmSet=1;document.documentElement.style.touchAction='none'}
+  const bd=(e.buttons&1)&&e.pressure===0&&!penDown;
+  if(bd&&!penBtn){penBtn=1;penEr=!penEr;ui()}
+  if(!(e.buttons&1))penBtn=0}
+ if(e.pointerType==='touch')return;
+ const now=Date.now();if(now-dbgT<150)return;dbgT=now;
+ const b=EB||(EB=document.querySelector('#tb [data-t=er]'));if(b)b.classList.toggle('on',T.tool==='er'||penEr||(e.buttons&34)>0);
+ const d=$('#dbg');if(d)d.textContent=e.pointerType+' кнопки:'+e.buttons+' p:'+(e.pressure||0).toFixed(2)+(penEr?' ластик':'');
+},true);
 
 /* ---------- рукописный движок ---------- */
 function paint(cv,sc){
@@ -115,7 +128,7 @@ function paint(cv,sc){
 const bbox=sc=>{let a=1e9,b=1e9,c=-1e9,d=-1e9;for(const s of sc)for(const p of s.p){a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1])}return[a,b,c,d]};
 function drawSel(cv){const u=cv.height,[a,b,c,e]=bbox(LS.sel);if(a>1e8)return;const x=cv.getContext('2d');x.save();x.setLineDash([8,6]);x.lineWidth=2;x.strokeStyle='#3b82f6';x.strokeRect(a*u-6,b*u-6,(c-a)*u+12,(e-b)*u+12);x.restore()}
 const inPoly=(p,g)=>{let c=false;for(let i=0,j=g.length-1;i<g.length;j=i++){if((g[i][1]>p[1])!==(g[j][1]>p[1])&&p[0]<(g[j][0]-g[i][0])*(p[1]-g[i][1])/(g[j][1]-g[i][1])+g[i][0])c=!c}return c};
-function startGhost(){LG=document.createElement('canvas');LG.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:50';const d=devicePixelRatio||1;LG.width=innerWidth*d;LG.height=innerHeight*d;document.body.append(LG)}
+function startGhost(){LG=document.createElement('canvas');LG.style.cssText='position:fixed;left:0;top:0;width:'+innerWidth+'px;height:'+innerHeight+'px;pointer-events:none;z-index:50';const d=devicePixelRatio||1;LG.width=innerWidth*d;LG.height=innerHeight*d;document.body.append(LG)}
 function endGhost(){if(LG)LG.remove();LG=null}
 function dropSel(cur,sc){
  const sr=sc.getBoundingClientRect(),us=sr.height,el=document.elementFromPoint(cur.lx,cur.ly),ik=el&&el.closest&&el.closest('.ink'),tc=(ik&&ik.querySelector('canvas'))||sc;
@@ -130,12 +143,14 @@ function dropSel(cur,sc){
  compactS(sel);LS={o:to,sel};paint(sc,so.s);paint(tc,to.s);
 }
 function attach(cv,get,done){
+ try{cv.getContext('2d',{desynchronized:true})}catch(e){}
  let cur=null,tp=null;
- const H=()=>cv.getBoundingClientRect().height;
- const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.height,(e.clientY-r.top)/r.height,e.pressure||.5]};
+ let rc=null;const H=()=>(rc||(rc=cv.getBoundingClientRect())).height;
+ const pt=e=>{const r=rc||(rc=cv.getBoundingClientRect());return[(e.clientX-r.left)/r.height,(e.clientY-r.top)/r.height,e.pressure||.5]};
  const er=p=>{const o=get(),rad=T.w*4/H(),n=o.s.length;o.s=o.s.filter(s=>!s.p.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<rad));if(o.s.length!==n)paint(cv,o.s)};
- const isEr=e=>T.tool==='er'||(e.pointerType!=='touch'&&((e.buttons&34)>0||e.button===2||e.button===5||(e.pointerType==='pen'&&(e.buttons&1)&&e.pressure===0)));
+ const isEr=e=>T.tool==='er'||penEr||(e.pointerType!=='touch'&&((e.buttons&34)>0||e.button===2||e.button===5||(e.pointerType==='pen'&&(e.buttons&1)&&e.pressure===0)));
  const begin=e=>{
+  rc=cv.getBoundingClientRect();
   if(T.tool==='lasso'&&!isEr(e)){const p=pt(e),o=get();
    if(LS&&LS.o===o&&LS.sel.length){const[a,b,c,d]=bbox(LS.sel);if(p[0]>=a-.1&&p[0]<=c+.1&&p[1]>=b-.1&&p[1]<=d+.1){cur={lasso:1,mode:'move',x0:e.clientX,y0:e.clientY,dx:0,dy:0,lx:e.clientX,ly:e.clientY,er:false};startGhost();lmove(e);return}}
    if(LS){LS=null;Q.forEach(f=>f())}
@@ -169,12 +184,16 @@ const lmove=e=>{
  };
  cv.onpointermove=e=>{
   if(tp){tp.m+=Math.abs(e.clientX-tp.x)+Math.abs(e.clientY-tp.y);if(tp.t&&!pinching&&!penNear())scrollBy(tp.x-e.clientX,tp.y-e.clientY);tp.x=e.clientX;tp.y=e.clientY;return}
-  if(!cur&&!tp&&e.pointerType==='pen'&&(e.buttons&1)&&e.pressure===0&&['pen','hl','er','lasso'].includes(T.tool)){try{cv.setPointerCapture(e.pointerId)}catch(_){}begin(e);cur.hov=1}
+  
   if(!cur)return;
   if(e.pointerType!=='touch'&&isEr(e)!==cur.er){fin();if(e.buttons)begin(e);else return}
   if(cur.lasso){lmove(e);return}
-  for(const v of(e.getCoalescedEvents?e.getCoalescedEvents():[e])){const p=pt(v);cur.er?er(p):cur.p.push(p)}
-  if(!cur.er)paint(cv,get().s.concat(cur));
+  const x=cur.er?null:cv.getContext('2d'),u=cv.height;
+  for(const v of(e.getCoalescedEvents?e.getCoalescedEvents():[e])){const p=pt(v);
+   if(cur.er){er(p);continue}
+   const a=cur.p[cur.p.length-1];cur.p.push(p);
+   if(!cur.h){x.globalAlpha=1;x.strokeStyle=cur.c;x.lineCap=x.lineJoin='round';x.lineWidth=cur.w*u*(.5+p[2]);x.beginPath();x.moveTo(a[0]*u,a[1]*u);x.lineTo(p[0]*u,p[1]*u);x.stroke()}}
+  if(cur.h&&!cur.er&&!cur.raf){const c=cur;c.raf=requestAnimationFrame(()=>{c.raf=0;if(cur===c)paint(cv,get().s.concat(c))})}
  };
  const up=e=>{
   if(cur&&cur.lasso&&cur.mode==='move'){cur.lx=e.clientX;cur.ly=e.clientY;cur.dx=e.clientX-cur.x0;cur.dy=e.clientY-cur.y0}
@@ -401,7 +420,7 @@ async function exportPdf(b){
    const inf=[];s.rows.forEach((r,i)=>{if(r.inf.s.length)inf.push([r,i+1])});
    for(let i=0;i<inf.length;i+=3)J.push(await infoPg(s,inf.slice(i,i+3),i/3+1));
   }
-  await sharePdf(mkPdf(J),'Zadachnik_'+ymd()+'.pdf');
+  await sharePdf(mkPdf(J),'Задачи на '+dmy()+'.pdf');
  }catch(e){b.textContent='Ошибка PDF';await new Promise(r=>setTimeout(r,2500))}
  b.innerHTML=t0;b.disabled=false;
 }
@@ -413,7 +432,7 @@ function immersive(on){try{
 }catch(e){}}
 function ui(){
  const im=['pen','hl','er','lasso'].includes(T.tool);if(im!==ui._im){ui._im=im;immersive(im)}
- document.querySelectorAll('#tb [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===T.tool));
+ document.querySelectorAll('#tb [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===T.tool||(penEr&&b.dataset.t==='er')));
  document.querySelectorAll('#tb [data-f]').forEach(b=>b.classList.toggle('on',T.tool==='fill'&&b.dataset.f===T.fill));
  document.querySelectorAll('#tb .sw').forEach(b=>b.classList.toggle('on',b.dataset.c===T.color&&['pen','hl'].includes(T.tool)));
 }
@@ -430,7 +449,7 @@ function colors(){
 (function(){
  const tb=$('#tb'),add=(t,f,x={})=>{const b=document.createElement('button');b.innerHTML=t;b.onclick=f;Object.assign(b,x);tb.append(b);return b};
  const sp=()=>tb.append(Object.assign(document.createElement('i'),{className:'sp'}));
- [['kbd','⌨','Клавиатура'],['pen','✒️','Ручка'],['hl','🖍','Маркер-выделитель'],['er','🧽','Ластик (ручка и выделение)']].concat([['lasso','➰','Лассо: обведите записи, затем перетащите (в т.ч. в другую строку)'],['rows','⇅','Строки: переместить, вставить, удалить']]).forEach(([t,i,ti])=>{add(i,()=>{T.tool=t;if(t!=='lasso'&&LS){LS=null;Q.forEach(f=>f())}ui()},{title:ti}).dataset.t=t});
+ [['kbd','⌨','Клавиатура'],['pen','✒️','Ручка'],['hl','🖍','Маркер-выделитель'],['er','🧽','Ластик (ручка и выделение)']].concat([['lasso','➰','Лассо: обведите записи, затем перетащите (в т.ч. в другую строку)'],['rows','⇅','Строки: переместить, вставить, удалить']]).forEach(([t,i,ti])=>{add(i,()=>{T.tool=t;penEr=false;if(t!=='lasso'&&LS){LS=null;Q.forEach(f=>f())}ui()},{title:ti}).dataset.t=t});
  add('✂',()=>{if(LS){const o=LS.o;o.s=o.s.filter(s=>!LS.sel.includes(s));LS=null;save();render(1)}},{title:'Удалить выделенное лассо'});
  sp();tb.append(Object.assign(document.createElement('span'),{id:'cw'}));
  const r=Object.assign(document.createElement('input'),{type:'range',min:1,max:12,value:T.w,title:'Толщина линии'});r.oninput=()=>T.w=+r.value;tb.append(r);
@@ -469,6 +488,6 @@ function render(kp){
  const t=inkCell(sh().title);t.style.cssText='position:absolute;inset:0';$('#ttl').replaceChildren(t);
  Q.forEach(f=>f());tabs();document.documentElement.style.setProperty('--th',$('#top').offsetHeight+'px');
 }
-let lw=0;const rs=()=>{const w=document.documentElement.clientWidth;if(w!==lw){lw=w;render(1)}};
-addEventListener('resize',rs);document.documentElement.style.setProperty('--z',S.z);rs();
+let lw=0;const rs=()=>{const w=document.documentElement.clientWidth;if(w!==lw){lw=w;FIT=Math.min(1,w/1300);applyZ();render(1)}};
+addEventListener('resize',rs);rs();
 </script></body></html>
