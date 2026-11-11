@@ -145,7 +145,6 @@ function dropSel(cur,sc){
  compactS(sel);LS={o:to,sel};paint(sc,so.s);paint(tc,to.s);
 }
 function attach(cv,get,done){
- try{cv.getContext('2d',{desynchronized:true})}catch(e){}
  let cur=null,tp=null;
  let rc=null;const H=()=>(rc||(rc=cv.getBoundingClientRect())).height;
  const pt=e=>{const r=rc||(rc=cv.getBoundingClientRect());return[(e.clientX-r.left)/r.height,(e.clientY-r.top)/r.height,e.pressure||.5]};
@@ -209,7 +208,8 @@ function edit(d,o,sp){
  i.onblur=()=>{if(dn)return;dn=1;o.t=i.value;sp.textContent=o.t;i.remove();save();numChk(d,o)};
  i.onkeydown=e=>{if(e.key==='Enter')i.blur()};
 }
-const FILLED=new WeakMap();let rnT=0;
+const FILLED=new WeakMap(),PAINT=new WeakMap();let rnT=0;
+const RO=window.ResizeObserver?new ResizeObserver(es=>es.forEach(en=>{const f=PAINT.get(en.target);if(f)f()})):{observe(){},disconnect(){}};
 const tf=o=>!!(o.s.length||(o.t&&o.t.trim()));
 function numChk(d,o){if(!d||d.dataset.c!=='task')return;const f=tf(o);if(FILLED.get(o)===f)return;FILLED.set(o,f);
  clearTimeout(rnT);rnT=setTimeout(function w(){if(Date.now()-penT<600){rnT=setTimeout(w,500);return}render(1)},700)}
@@ -219,7 +219,7 @@ function inkCell(o){
  FILLED.set(o,tf(o));
  attach(cv,()=>o,k=>{if(k==='ink')numChk(d,o);if(k!=='tap')return;if(T.tool==='fill')fillAt(d);else if(T.tool==='rows'&&d.dataset.r!=null)rowPop(d,+d.dataset.r)});
  cv.onclick=()=>{if(T.tool==='kbd'&&cv._m<10&&Date.now()-noTap>350)edit(d,o,sp)};
- Q.push(()=>paint(cv,o.s));return d;
+ const pf=()=>paint(cv,o.s);PAINT.set(cv,pf);RO.observe(cv);Q.push(pf);return d;
 }
 
 /* ---------- цвета, фильтры ---------- */
@@ -479,7 +479,7 @@ function colors(){
 
 /* ---------- отрисовка таблицы ---------- */
 function render(kp){
- if(!kp)closePop();Q=[];const g=$('#grid');g.innerHTML='';
+ if(!kp)closePop();RO.disconnect();Q=[];const g=$('#grid');g.innerHTML='';
  const h=document.createElement('div');h.className='row hd';
  HD.forEach((t,i)=>{const c=document.createElement('div'),k=COLS[i];c.className='c'+(F[k]&&(F[k].q||F[k].c||(F[k].n&&F[k].n.length))?' flt':'');c.textContent=t;c.dataset.h=k;h.append(c)});
  g.append(h);
